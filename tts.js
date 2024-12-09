@@ -56,6 +56,12 @@ client.on(Events.InteractionCreate, async interaction => {
       console.log(`Received message from ${message.author.tag} in ${message.channel.name}`);
       if (message.author.bot) return;
 
+      // Skip messages containing URLs
+      if (/\bhttps?:\/\/\S+/i.test(message.content)) {
+        console.log('Message contains a URL, skipping TTS.');
+        return;
+      }
+
       const ttsPath = './tts_output.wav';
       try {
         console.log(`Generating TTS for ${message.content}`);
