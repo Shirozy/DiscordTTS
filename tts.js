@@ -12,7 +12,8 @@ const client = new Client({
   ],
 });
 
-const player = createAudioPlayer();
+const connections = new Map();
+const players = new Map();
 
 client.once(Events.ClientReady, () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -30,6 +31,11 @@ client.on(Events.InteractionCreate, async interaction => {
       return;
     }
 
+    if (connections.has(interaction.guild.id)) {
+      await interaction.reply('I am already in a voice channel in this server.');
+      return;
+    }
+
     console.log(`Received joinvc command from ${interaction.user.tag} in ${interaction.guild.name}`);
 
     const connection = joinVoiceChannel({
@@ -38,25 +44,20 @@ client.on(Events.InteractionCreate, async interaction => {
       adapterCreator: interaction.guild.voiceAdapterCreator,
     });
 
+    const player = createAudioPlayer();
     connection.subscribe(player);
 
+    connections.set(interaction.guild.id, connection);
+    players.set(interaction.guild.id, player);
+
+    await interaction.reply(`Joined ${voiceChannel.name} and listening to messages.`);
+
     const textChannel = interaction.channel;
-    if (!textChannel) {
-      await interaction.reply('No associated text channel found!');
-      return;
-    }
-
-    console.log(`Joined ${voiceChannel.name} and listening to messages in ${textChannel.name}.`);
-
-    await interaction.reply(`Joined ${voiceChannel.name} and listening to messages in ${textChannel.name}.`);
-
     const collector = textChannel.createMessageCollector();
 
     collector.on('collect', async message => {
-      console.log(`Received message from ${message.author.tag} in ${message.channel.name}`);
       if (message.author.bot) return;
 
-      // Skip messages containing URLs
       if (/\bhttps?:\/\/\S+/i.test(message.content)) {
         console.log('Message contains a URL, skipping TTS.');
         return;
@@ -67,7 +68,11 @@ client.on(Events.InteractionCreate, async interaction => {
         console.log(`Generating TTS for ${message.content}`);
         await generateTTS(message.content, ttsPath);
         const resource = createAudioResource(ttsPath);
-        player.play(resource);
+
+        const player = players.get(interaction.guild.id);
+        if (player) {
+          player.play(resource);
+        }
       } catch (err) {
         console.error('Error generating TTS:', err);
         message.reply('Failed to generate TTS!');
